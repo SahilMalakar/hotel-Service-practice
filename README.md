@@ -12,10 +12,10 @@ git clone https://github.com/SahilMalakar/hotel-Service-practice.git <ProjectNam
 cd <ProjectName>
 ```
 
-3. Install npm dependencies
+3. Install pnpm dependencies
 
 ```
-npm i
+pnpm i
 ```
 
 4. Create a new .env file in the root directory and add the `PORT` env variable
@@ -27,5 +27,5 @@ echo PORT=3000 >> .env
 5. Start the express server
 
 ```
-npm run dev
+pnpm run dev
 ```
