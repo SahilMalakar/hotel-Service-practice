@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Booking{
+  id             Int   @id  @default(autoincrement())
+  userId         Int
+  hotelId        Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  bookingAmout   Int
+  status         BookingStatus
+
+}
+
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}

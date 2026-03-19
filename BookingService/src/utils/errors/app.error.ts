@@ -17,6 +17,16 @@ export interface AppError extends Error {
  * @class InternalServerError
  * @implements {AppError}
  */
+
+export const isAppError = (err: any): err is AppError => {
+  return (
+    err &&
+    typeof err === "object" &&
+    "statusCode" in err &&
+    typeof err.statusCode === "number"
+  );
+};
+
 export class InternalServerError implements AppError {
     statusCode: number;
     message: string;
