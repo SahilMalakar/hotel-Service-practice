@@ -6,6 +6,7 @@ import {
 } from "./middlewares/error.middleware";
 import logger from "./config/logger.config";
 import { attachCorrelationIdMiddleware } from "./middlewares/correlation.middleware";
+import { bookingRouter } from "./routers/v1/booking.router";
 const app = express();
 
 app.use(express.json());
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use(attachCorrelationIdMiddleware);
 
 // Add the error handler middleware
+app.use("/api/v1",bookingRouter)
 
 app.use(appErrorHandler);
 app.use(genericErrorHandler);

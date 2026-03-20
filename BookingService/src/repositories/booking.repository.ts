@@ -1,11 +1,30 @@
-import { Prisma } from "../prisma/generated/prisma/client";
+import { IdempotencyKey, Prisma } from "../prisma/generated/prisma/client";
 import { prisma } from "../prisma/prisma";
+import { validate as isValidUUID } from "uuid";
+import { BadRequestError, NotFoundError } from "../utils/errors/app.error";
 
 // Creates a new booking record in the database using Prisma input
+// export async function createBooking(bookingData: Prisma.BookingCreateInput) {
+//   return await prisma.booking.create({
+//     data: bookingData,
+//   });
+// }
 export async function createBooking(bookingData: Prisma.BookingCreateInput) {
-  return await prisma.booking.create({
-    data: bookingData,
-  });
+  console.log("📦 [REPO] createBooking START");
+
+  try {
+    const result = await prisma.booking.create({
+      data: bookingData,
+    });
+
+    console.log("✅ [REPO] Booking inserted:", result);
+    return result;
+  } catch (err: any) {
+    console.error("❌ [REPO] createBooking FAILED");
+    console.error("👉 Message:", err.message);
+    console.error("👉 Code:", err.code);
+    throw err;
+  }
 }
 
 // 2 approaches
@@ -15,14 +34,14 @@ export async function createBooking(bookingData: Prisma.BookingCreateInput) {
 // ---> create booking ||parallel to create idempotency key ->update the idempotency key to add the booking instances
 
 // Creates an idempotency key and links it to an existing booking via bookingId
-export async function createIdempotencyKey(key: string, bookingId: number) {
+export async function createIdempotencyKey(idemKey: string, bookingId: number) {
   if (!bookingId) {
     throw new Error("Booking ID is required");
   }
 
   return await prisma.idempotencyKey.create({
     data: {
-      key,
+      idemKey,
       bookings: {
         connect: { id: bookingId },
       },
@@ -38,12 +57,33 @@ export async function createIdempotencyKey(key: string, bookingId: number) {
 // }
 
 // Fetches an idempotency key record by its unique key
-export async function getIdempotencyKey(key: string) {
-  return await prisma.idempotencyKey.findUnique({
-    where: {
-      key,
-    },
-  });
+// export async function getIdempotencyKey(key: string) {
+//   return await prisma.idempotencyKey.findUnique({
+//     where: {
+//       key,
+//     },
+//   });
+// }
+export async function getIdempotencyKey(
+  tx: Prisma.TransactionClient,
+  key: string,
+) {
+  if (!isValidUUID(key)) {
+    throw new BadRequestError("invalid idempotency key format");
+  }
+
+  const idempotencyKeyLock: Array<IdempotencyKey> = await tx.$queryRaw`
+  SELECT * FROM idempotencyKey 
+  WHERE idemKey = ${key} 
+  FOR UPDATE
+`;
+  console.log(`idempotency key with lock : ${idempotencyKeyLock}`);
+
+  if (!idempotencyKeyLock || idempotencyKeyLock.length === 0) {
+    throw new NotFoundError("idempotency key not found");
+  }
+
+  return idempotencyKeyLock[0];
 }
 
 // Retrieves a booking record by its primary ID
@@ -93,8 +133,8 @@ export async function getBookingById(id: number) {
 // }
 
 // Marks a booking as CONFIRMED based on its ID
-export async function confirmBooking(id: number) {
-  return await prisma.booking.update({
+export async function confirmBooking(tx: Prisma.TransactionClient, id: number) {
+  return await tx.booking.update({
     where: {
       id,
     },
@@ -117,10 +157,13 @@ export async function cancelBooking(id: number) {
 }
 
 // Updates the idempotency key to mark it as finalized
-export async function finalizedIdempotencyKey(key: string) {
-  return await prisma.idempotencyKey.update({
+export async function finalizedIdempotencyKey(
+  tx: Prisma.TransactionClient,
+  idemKey: string,
+) {
+  return await tx.idempotencyKey.update({
     where: {
-      key,
+      idemKey,
     },
     data: {
       finalized: true,

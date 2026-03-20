@@ -15,8 +15,8 @@ bookingRouter.post(
 );
 
 bookingRouter.post(
-    "/bookings/:idempotencyKey",
-    confirmBookingController
+  "/bookings/:idempotencyKey",
+  confirmBookingController
 );
 
 export { bookingRouter };
