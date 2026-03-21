@@ -1,27 +1,10 @@
 import "dotenv/config";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
 
-console.log({
-  host: process.env.DATABASE_HOST,
-  user: process.env.DATABASE_USER,
-  database: process.env.DATABASE_NAME,
-});
+const connectionString = `${process.env.DATABASE_URL}`;
 
-const adapter = new PrismaMariaDb({
-  host: process.env.DATABASE_HOST,
-  user: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
-  database: process.env.DATABASE_NAME,
-  connectionLimit: 25,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
-
-const prisma = new PrismaClient({
-  adapter,
-  log: ["query", "info", "warn", "error"], // 🔥 ADD THIS
-});
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 export { prisma };

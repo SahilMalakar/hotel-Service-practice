@@ -4,27 +4,10 @@ import { validate as isValidUUID } from "uuid";
 import { BadRequestError, NotFoundError } from "../utils/errors/app.error";
 
 // Creates a new booking record in the database using Prisma input
-// export async function createBooking(bookingData: Prisma.BookingCreateInput) {
-//   return await prisma.booking.create({
-//     data: bookingData,
-//   });
-// }
 export async function createBooking(bookingData: Prisma.BookingCreateInput) {
-  console.log("📦 [REPO] createBooking START");
-
-  try {
-    const result = await prisma.booking.create({
-      data: bookingData,
-    });
-
-    console.log("✅ [REPO] Booking inserted:", result);
-    return result;
-  } catch (err: any) {
-    console.error("❌ [REPO] createBooking FAILED");
-    console.error("👉 Message:", err.message);
-    console.error("👉 Code:", err.code);
-    throw err;
-  }
+  return await prisma.booking.create({
+    data: bookingData,
+  });
 }
 
 // 2 approaches
@@ -73,8 +56,8 @@ export async function getIdempotencyKey(
   }
 
   const idempotencyKeyLock: Array<IdempotencyKey> = await tx.$queryRaw`
-  SELECT * FROM idempotencyKey 
-  WHERE idemKey = ${key} 
+  SELECT * FROM "IdempotencyKey"
+  WHERE "idemKey" = ${key}
   FOR UPDATE
 `;
   console.log(`idempotency key with lock : ${idempotencyKeyLock}`);

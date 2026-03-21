@@ -1,3 +1,4 @@
+import { Prisma } from "../prisma/generated/prisma/client";
 import { prisma } from "../prisma/prisma";
 import {
   confirmBooking,
@@ -11,75 +12,65 @@ import { generateIdempotency } from "../utils/helpers/generateIdempotencyKey";
 import { CreateBookingInput } from "../utils/schema/types";
 
 
-// export async function createBookingService(bookingData: CreateBookingInput) {
-//   // Create booking first (core business operation)
-//   const booking = await createBooking(bookingData);
-
-//   // Generate unique idempotency key for this booking
-//   const idempotencyKey = generateIdempotency();
-
-//   // Link idempotency key with created booking
-//   await createIdempotencyKey(idempotencyKey, booking.id);
-
-//   // Return minimal response needed by client
-//   return {
-//     bookingId: booking.id,
-//     idempotencyKey: idempotencyKey,
-//   };
-// }
-
 export async function createBookingService(bookingData: CreateBookingInput) {
-  console.log("🚀 [SERVICE] createBookingService START");
+  // Create booking first (core business operation)
+  const booking = await createBooking(bookingData);
 
-  try {
-    console.log("📥 [SERVICE] Input:", bookingData);
+  // Generate unique idempotency key for this booking
+  const idempotencyKey = generateIdempotency();
 
-    console.log("📦 [SERVICE] Calling createBooking...");
-    const booking = await createBooking(bookingData);
-    console.log("✅ [SERVICE] Booking created:", booking);
+  // Link idempotency key with created booking
+  await createIdempotencyKey(idempotencyKey, booking.id);
 
-    console.log("🔑 [SERVICE] Generating idempotency key...");
-    const idempotencyKey = generateIdempotency();
-    console.log("✅ [SERVICE] Idempotency key:", idempotencyKey);
-
-    console.log("🔗 [SERVICE] Linking idempotency key...");
-    await createIdempotencyKey(idempotencyKey, booking.id);
-    console.log("✅ [SERVICE] Idempotency key linked");
-
-    console.log("🎉 [SERVICE] SUCCESS");
-
-    return {
-      bookingId: booking.id,
-      idempotencyKey: idempotencyKey,
-    };
-  } catch (err: any) {
-    console.error("❌ [SERVICE] FAILED");
-    console.error("👉 Message:", err.message);
-    console.error("👉 Code:", err.code);
-    console.error("👉 Stack:", err.stack);
-    throw err;
-  }
+  // Return minimal response needed by client
+  return {
+    bookingId: booking.id,
+    idempotencyKey: idempotencyKey,
+  };
 }
+
 
 // Pessimistic Locking --> Lock row immediately
 export async function confirmBookingService(idempotencyKey: string) {
-  return await prisma.$transaction(async (tx) => {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const idempotencyKeyData = await getIdempotencyKey(tx, idempotencyKey);
+  
+        if (!idempotencyKeyData || !idempotencyKeyData.bookingId) {
+          throw new NotFoundError("Idempotency key not found");
+        }
+  
+        if (idempotencyKeyData.finalized) {
+          throw new BadRequestError("Idempotency key already finalized");
+        }
+  
+        const booking = await confirmBooking(tx, idempotencyKeyData.bookingId);
+  
+        await finalizedIdempotencyKey(tx, idempotencyKey);
+        return booking;
+      },
+    );
+  } catch (error :any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2028 → transaction already closed
+      if (error.code === "P2028") {
+        console.error("❌ Transaction closed unexpectedly");
 
-    const idempotencyKeyData = await getIdempotencyKey(tx ,idempotencyKey);
+        throw new BadRequestError(
+          "Transaction failed due to timeout or concurrency issue. Please retry.",
+        );
+      }
 
-    if (!idempotencyKeyData || !idempotencyKeyData.bookingId) {
-      throw new NotFoundError("Idempotency key not found");
+      // Optional: handle other Prisma errors
+      if (error.code === "P2002") {
+        throw new BadRequestError("Unique constraint failed");
+      }
     }
 
-    if (idempotencyKeyData.finalized) {
-      throw new BadRequestError("Idempotency key already finalized");
-    }
-
-    const booking = await confirmBooking(tx ,idempotencyKeyData.bookingId);
-
-    await finalizedIdempotencyKey(tx ,idempotencyKey);
-    return booking;
-  });
+    // fallback
+    throw error;
+  }
 }
 
 // export async function confirmBookingService(idempotencyKey: string) {

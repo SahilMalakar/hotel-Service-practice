@@ -12,6 +12,7 @@
   "description": "",
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.5.0",
+    "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
