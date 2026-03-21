@@ -1,3 +1,5 @@
+import { serverConfig } from "../config";
+import { redLock } from "../config/redis.config";
 import { Prisma } from "../prisma/generated/prisma/client";
 import { prisma } from "../prisma/prisma";
 import {
@@ -7,51 +9,88 @@ import {
   getIdempotencyKey,
   finalizedIdempotencyKey,
 } from "../repositories/booking.repository";
-import { BadRequestError, NotFoundError } from "../utils/errors/app.error";
+import {
+  BadRequestError,
+  InternalServerError,
+  NotFoundError,
+} from "../utils/errors/app.error";
 import { generateIdempotency } from "../utils/helpers/generateIdempotencyKey";
 import { CreateBookingInput } from "../utils/schema/types";
 
 
+// Distributed lock using Redis (manual acquire/release) to prevent concurrent booking conflicts
 export async function createBookingService(bookingData: CreateBookingInput) {
-  // Create booking first (core business operation)
-  const booking = await createBooking(bookingData);
+  const ttl = serverConfig.LOCK_TTL; // Lock duration (must exceed execution time)
 
-  // Generate unique idempotency key for this booking
-  const idempotencyKey = generateIdempotency();
+  // Lock key scoped to shared resource (hotel)
+  const lockKey = `hotel:${bookingData.hotelId}`;
 
-  // Link idempotency key with created booking
-  await createIdempotencyKey(idempotencyKey, booking.id);
+  let lock;
+  try {
+    // Acquire Redis distributed lock
+    lock = await redLock.acquire([lockKey], ttl);
 
-  // Return minimal response needed by client
-  return {
-    bookingId: booking.id,
-    idempotencyKey: idempotencyKey,
-  };
+    console.log(`lock acquired for resource`, lockKey, lock);
+
+    // Create booking record (primary DB write)
+    const booking = await createBooking(bookingData);
+
+    // Generate idempotency key for request tracking
+    const idempotencyKey = generateIdempotency();
+
+    // Persist idempotency key linked to booking
+    await createIdempotencyKey(idempotencyKey, booking.id);
+
+    // Return minimal response to client
+    return {
+      bookingId: booking.id,
+      idempotencyKey,
+    };
+  } catch (err: any) {
+    console.error("❌ Booking failed:", err);
+
+    throw new InternalServerError(
+      "Failed to acquired lock for booking resources",
+    );
+  } finally {
+    if (lock) {
+      try {
+        await lock.release();
+        console.log("🔓 lock released for resource:", lockKey);
+      } catch (e) {
+        console.error("⚠️ Failed to release lock", e);
+      }
+    }
+  }
 }
 
-
 // Pessimistic Locking --> Lock row immediately
+// this solve the multiple parallel request (conqurency) for signle users
 export async function confirmBookingService(idempotencyKey: string) {
   try {
     return await prisma.$transaction(
       async (tx) => {
         const idempotencyKeyData = await getIdempotencyKey(tx, idempotencyKey);
-  
+
         if (!idempotencyKeyData || !idempotencyKeyData.bookingId) {
           throw new NotFoundError("Idempotency key not found");
         }
-  
+
         if (idempotencyKeyData.finalized) {
           throw new BadRequestError("Idempotency key already finalized");
         }
-  
+
         const booking = await confirmBooking(tx, idempotencyKeyData.bookingId);
-  
+
         await finalizedIdempotencyKey(tx, idempotencyKey);
         return booking;
       },
+      {
+        maxWait: 5000,
+        timeout: 10000,
+      },
     );
-  } catch (error :any) {
+  } catch (error: any) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       // P2028 → transaction already closed
       if (error.code === "P2028") {

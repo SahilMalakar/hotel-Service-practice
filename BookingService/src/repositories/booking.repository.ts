@@ -60,7 +60,7 @@ export async function getIdempotencyKey(
   WHERE "idemKey" = ${key}
   FOR UPDATE
 `;
-  console.log(`idempotency key with lock : ${idempotencyKeyLock}`);
+  console.log(`idempotency key with lock : `,idempotencyKeyLock);
 
   if (!idempotencyKeyLock || idempotencyKeyLock.length === 0) {
     throw new NotFoundError("idempotency key not found");
