@@ -7,6 +7,7 @@ import {
 import logger from "./config/logger.config";
 import { attachCorrelationIdMiddleware } from "./middlewares/correlation.middleware";
 import { setUpMailerWorker } from "./worker/email.worker";
+import { addMailToQueue } from "./publisher/email.producer";
 
 const app = express();
 
@@ -26,5 +27,39 @@ app.listen(serverConfig.PORT, async () => {
   setUpMailerWorker();
   logger.info("Mailer worker setup completed");
 
-  
+  const testNotifications = [
+    {
+      to: "sahilmalakar150@gmail.com",
+      subject: "Welcome to MyApp",
+      templateId: "welcome",
+      params: {
+        name: "Sahil",
+        appName: "MyApp",
+      },
+    },
+    {
+      to: "dazzbikram@gmail.com",
+      subject: "Welcome to MyApp",
+      templateId: "welcome",
+      params: {
+        name: "Bikram",
+        appName: "MyApp",
+      },
+    },
+    {
+      to: "rakhimalakar1985@gmail.com",
+      subject: "Welcome to MyApp",
+      templateId: "welcome",
+      params: {
+        name: "Rakhi",
+        appName: "MyApp",
+      },
+    },
+  ];
+
+  for (const notification of testNotifications) {
+    await addMailToQueue(notification);
+  }
+
+  console.log("rendered the final email response : ", testNotifications);
 });

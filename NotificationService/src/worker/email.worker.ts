@@ -4,6 +4,9 @@ import { MAILER_QUEUE } from "../queues/mailer.queue";
 import { getRedisConnection } from "../config/redis.config";
 import { error, log } from "console";
 import { MAILER_PAYLOAD } from "../publisher/email.producer";
+import { readMailTemplate } from "../utils/templets/templet.handler";
+import { sendEmail } from "../services/mail.service";
+import logger from "../config/logger.config";
 
 export const setUpMailerWorker = () => {
   const emailWorker = new Worker<NotificationTypes>(
@@ -13,10 +16,20 @@ export const setUpMailerWorker = () => {
         throw new Error("invalid job user");
       }
 
-        // call the service layer from here
-        const payload = job.data;
-        console.log("Processing email for : ",JSON.stringify(payload));
-        
+      // call the service layer from here
+      const payload = job.data;
+      console.log("Processing email for : ", JSON.stringify(payload));
+
+      const emailContent = await readMailTemplate(
+        payload.templateId,
+        payload.params,
+      );
+
+      await sendEmail(payload.to, payload.subject, emailContent);
+
+      logger.info(
+        `email sent to  ${payload.to} with subject ${payload.subject}`,
+      );
     },
     {
       connection: getRedisConnection() as any,

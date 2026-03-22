@@ -8,7 +8,7 @@ export function connectToRedis() {
 
     return () => {
       if (!redisClient) {
-        redisClient = new Redis(serverConfig.REDIS_SERVER_URL, {
+        redisClient = new Redis(serverConfig.REDIS_SERVER_URL as string, {
           maxRetriesPerRequest:null
         });
 
