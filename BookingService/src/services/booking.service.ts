@@ -52,16 +52,7 @@ export async function createBookingService(bookingData: CreateBookingInput) {
     throw new InternalServerError(
       "Failed to acquired lock for booking resources",
     );
-  } finally {
-    if (lock) {
-      try {
-        await lock.release();
-        console.log("🔓 lock released for resource:", lockKey);
-      } catch (e) {
-        console.error("⚠️ Failed to release lock", e);
-      }
-    }
-  }
+  } 
 }
 
 // Pessimistic Locking --> Lock row immediately

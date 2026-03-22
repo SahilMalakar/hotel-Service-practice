@@ -1,13 +1,43 @@
-import IORedis from "ioredis";
+import  { Redis } from "ioredis";
 import Redlock from "redlock";
 import { serverConfig } from ".";
 
-export const redisclient = new IORedis(serverConfig.REDIS_SERVER_URL);
+// export const redisclient = new IORedis(serverConfig.REDIS_SERVER_URL);
+
+export function connectToRedis() {
+  try {
+    let redisClient: Redis;
+
+    return () => {
+      if (!redisClient) {
+        redisClient = new Redis(serverConfig.REDIS_SERVER_URL, {
+          maxRetriesPerRequest: null,
+        });
+
+        redisClient.on("connect", () => {
+          console.log("✅ Redis connected");
+        });
+
+        redisClient.on("error", (err) => {
+          console.error("❌ Redis error:", err);
+        });
+      }
+
+      return redisClient;
+    };
+  } catch (error) {
+    console.log(`error connecting redis :`, error);
+
+    throw error;
+  }
+}
+
+export const getRedisConnection = connectToRedis();
 
 export const redLock = new Redlock(
   // You should have one client for each independent redis node
   // or cluster.
-  [redisclient],
+  [getRedisConnection()],
   {
     // The expected clock drift; for more details see:
     // http://redis.io/topics/distlock

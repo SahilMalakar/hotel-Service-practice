@@ -6,8 +6,8 @@ import {
 } from "./middlewares/error.middleware";
 import logger from "./config/logger.config";
 import { attachCorrelationIdMiddleware } from "./middlewares/correlation.middleware";
-import { bookingRouter } from "./routers/v1/booking.router";
-import { addMailToQueue } from "./publisher/email.producer";
+import { setUpMailerWorker } from "./worker/email.worker";
+
 const app = express();
 
 app.use(express.json());
@@ -17,30 +17,14 @@ app.use(express.json());
 app.use(attachCorrelationIdMiddleware);
 
 // Add the error handler middleware
-app.use("/api/v1",bookingRouter)
 
 app.use(appErrorHandler);
 app.use(genericErrorHandler);
 
 app.listen(serverConfig.PORT, async () => {
   logger.info(`Server is running on http://localhost:${serverConfig.PORT}`);
+  setUpMailerWorker();
+  logger.info("Mailer worker setup completed");
 
   
-  for (let i = 1; i <= 20 ; i++) {
-    try {
-      addMailToQueue({
-        to: "user@example.com",
-        subject: `Welcome to our platform ${i} `,
-        templateId: "welcome-email",
-        params: {
-          name: "Sahil",
-          appName: "MyApp",
-        }
-      });
-    } catch (error) {
-      console.error("error sending the email : ",error)
-    }
-    
-  }
-  logger.info("Mailer worker setup completed");
 });
